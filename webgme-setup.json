@@ -4,9 +4,16 @@
       "PetriNet": {
         "src": "src/seeds/PetriNet"
       }
+    },
+    "plugins": {
+      "PetriNetCodeGenerator": {
+        "src": "src/plugins/PetriNetCodeGenerator",
+        "test": "test/plugins/PetriNetCodeGenerator"
+      }
     }
   },
   "dependencies": {
-    "seeds": {}
+    "seeds": {},
+    "plugins": {}
   }
 }
