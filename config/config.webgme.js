@@ -12,14 +12,17 @@ config.seedProjects.basePaths.push(__dirname + '/../src/seeds/PetriNet');
 
 
 
+config.visualization.panelPaths.push(__dirname + '/../src/visualizers/panels');
 
 
 
 
 // Visualizer descriptors
-
+config.visualization.visualizerDescriptors.push(__dirname + '/../src/visualizers/Visualizers.json');
 // Add requirejs paths
 config.requirejsPaths = {
+  'panels': './src/visualizers/panels',
+  'widgets': './src/visualizers/widgets',
   'petri-nets': './src/common'
 };
 

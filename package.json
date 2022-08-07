@@ -22,6 +22,7 @@
     "webgme": "^2.23.0"
   },
   "dependencies": {
+    "jointjs": "^3.5.5",
     "webgme-bindings": "latest"
   }
 }
