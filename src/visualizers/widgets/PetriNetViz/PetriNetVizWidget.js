@@ -285,7 +285,7 @@ define(['jointjs', 'css!./styles/PetriNetVizWidget.css'], function (joint) {
         this.fireTokens(places);
         this._decorateMachine();
         if (Object.keys(pn.events).length == 0){
-            alert('Network is Deadlocked!');
+            alert('Network is missing tokens');
         }
     };
 
