@@ -25,10 +25,13 @@ define([
         this._widget = options.widget;
 
         this._currentNodeId = null;
-        this._currentNodeParentId = undefined;
+        // this._currentNodeParentId = undefined;
+        this._networkRootLoaded = false;
+        this._fireableEvents = null;
 
         this._initWidgetEventHandlers();
 
+        this.setFireableEvents = this.setFireableEvents.bind(this);
         this._logger.debug('ctor finished');
     }
 
@@ -44,33 +47,35 @@ define([
     // defines the parts of the project that the visualizer is interested in
     // (this allows the browser to then only load those relevant parts).
     PetriNetVizControl.prototype.selectedObjectChanged = function (nodeId) {
-        var desc = this._getObjectDescriptor(nodeId),
-            self = this;
+        // var desc = this._getObjectDescriptor(nodeId),
+        //     self = this;
 
-        self._logger.debug('activeObject nodeId \'' + nodeId + '\'');
+        // self._logger.debug('activeObject nodeId \'' + nodeId + '\'');
+        var self = this;
 
         // Remove current territory patterns
         if (self._currentNodeId) {
             self._client.removeUI(self._territoryId);
+            self._networkRootLoaded = false;
         }
 
         self._currentNodeId = nodeId;
-        self._currentNodeParentId = undefined;
+        // self._currentNodeParentId = undefined;
 
         if (typeof self._currentNodeId === 'string') {
             // Put new node's info into territory rules
             self._selfPatterns = {};
-            self._selfPatterns[nodeId] = {children: 0};  // Territory "rule"
+            self._selfPatterns[nodeId] = {children: 1};  // Territory "rule"
 
-            self._widget.setTitle(desc.name.toUpperCase());
+            // self._widget.setTitle(desc.name.toUpperCase());
 
-            if (typeof desc.parentId === 'string') {
-                self.$btnModelHierarchyUp.show();
-            } else {
-                self.$btnModelHierarchyUp.hide();
-            }
+            // if (typeof desc.parentId === 'string') {
+            //     self.$btnModelHierarchyUp.show();
+            // } else {
+            //     self.$btnModelHierarchyUp.hide();
+            // }
 
-            self._currentNodeParentId = desc.parentId;
+            // self._currentNodeParentId = desc.parentId;
 
             self._territoryId = self._client.addUI(self, function (events) {
                 self._eventCallback(events);
@@ -79,8 +84,8 @@ define([
             // Update the territory
             self._client.updateTerritory(self._territoryId, self._selfPatterns);
 
-            self._selfPatterns[nodeId] = {children: 1};
-            self._client.updateTerritory(self._territoryId, self._selfPatterns);
+            // self._selfPatterns[nodeId] = {children: 1};
+            // self._client.updateTerritory(self._territoryId, self._selfPatterns);
         }
     };
 
@@ -117,26 +122,26 @@ define([
                 }
         });
 
-        this._logger.debug('_eventCallback \'' + events.length + '\' items - DONE');
+        // this._logger.debug('_eventCallback \'' + events.length + '\' items - DONE');
         if (events.length && events[0].etype === 'complete' && self._networkRootLoaded) {
             // complete means we got all requested data and we do not have to wait for additional load cycles
             self._initNetwork();
         }
     };
 
-    PetriNetVizControl.prototype._onLoad = function (gmeId) {
-        var description = this._getObjectDescriptor(gmeId);
-        this._widget.addNode(description);
-    };
+    // PetriNetVizControl.prototype._onLoad = function (gmeId) {
+    //     var description = this._getObjectDescriptor(gmeId);
+    //     this._widget.addNode(description);
+    // };
 
-    PetriNetVizControl.prototype._onUpdate = function (gmeId) {
-        var description = this._getObjectDescriptor(gmeId);
-        this._widget.updateNode(description);
-    };
+    // PetriNetVizControl.prototype._onUpdate = function (gmeId) {
+    //     var description = this._getObjectDescriptor(gmeId);
+    //     this._widget.updateNode(description);
+    // };
 
-    PetriNetVizControl.prototype._onUnload = function (gmeId) {
-        this._widget.removeNode(gmeId);
-    };
+    // PetriNetVizControl.prototype._onUnload = function (gmeId) {
+    //     this._widget.removeNode(gmeId);
+    // };
 
     PetriNetVizControl.prototype._stateActiveObjectChanged = function (model, activeObjectId) {
         if (this._currentNodeId === activeObjectId) {
@@ -164,7 +169,6 @@ define([
         const fireables = {};
         
         elementIds.forEach(elementId => {
-            console.log('elementId', elementId)
             const node = self._client.getNode(elementId);
             console.log('node', node)
             
@@ -216,8 +220,8 @@ define([
             }
         });
 
-        sm.events = this.setFireableEvents;
-
+        sm.setFireableEvents = this.setFireableEvents;
+        this._displayToolbarItems();
         // send collected petriProps to widget
         self._widget.initNetwork(sm);
     };
@@ -225,14 +229,13 @@ define([
     PetriNetVizControl.prototype.setFireableEvents = function (events) {
         this._fireableEvents = events;
 
-        console.log(events);
+        console.log('_fireableEvents', events);
         if (events && Object.keys(events).length > 1) {
-            // we need to fill the dropdow button with options
             this.$btnEventSelector.clear();
             Object.keys(events).forEach(event => {
                 this.$btnEventSelector.addButton({
                     text: event,
-                    title: 'fire event: '+ event,
+                    title: 'Fire: '+ event,
                     data: {event: event},
                     clickFn: data => {
                         this._widget.fireEvent(data.event);
@@ -243,6 +246,12 @@ define([
             this._fireableEvents = null;
         }
         this._displayToolbarItems();
+    };
+
+    PetriNetVizControl.prototype.clearNetwork = function () {
+        const self = this;
+        self._networkRootLoaded = false;
+        self._widget.destroyMachine();
     };
 
     PetriNetVizControl.prototype.destroy = function () {
@@ -333,6 +342,49 @@ define([
         });
         this._toolbarItems.push(this.$cbShowConnection);
 
+        // Graph reset
+        this.$btnResetNetwork = toolBar.addButton({
+            title: 'Reset',
+            text: 'Reset ',
+            icon: 'glyphicon glyphicon-repeat',
+            clickFn: function (/*data*/) {
+                self._initNetwork();
+            }
+        });
+        this._toolbarItems.push(this.$btnResetNetwork);
+
+        // Mdl classification
+        this.$btnClassify = toolBar.addButton({
+            title: 'Classify PetriNet',
+            icon: 'glyphicon glyphicon-filter',
+            text: 'Classify ',
+            clickFn: function (data) {
+                const context = self._client.getCurrentPluginContext('PetriNetCodeGenerator',self._currentNodeId, []);
+                console.log(context);
+                console.log(self._currentNodeId);
+                context.pluginConfig = {};
+                self._client.runServerPlugin(
+                    'PetriNetCodeGenerator', 
+                    context, 
+                    function(err, result){
+                        console.log('plugin error:', err);
+                        console.log('plugin result:', result);
+                });
+            }
+        });
+        this._toolbarItems.push(this.$btnClassify);
+
+
+        // Fire Button
+        this.$btnResetNetwork = toolBar.addButton({
+            title: 'Fire all transitions',
+            text: 'Fire all ',
+            icon: 'glyphicon glyphicon-fire',
+            clickFn: function (data) {
+                self._widget._setAllStates();
+            }
+        });
+        this._toolbarItems.push(this.$btnResetNetwork);
         this._toolbarInitialized = true;
     };
 

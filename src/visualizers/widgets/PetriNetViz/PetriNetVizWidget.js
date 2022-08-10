@@ -37,22 +37,23 @@ define(['jointjs', 'css!./styles/PetriNetVizWidget.css'], function (joint) {
             width : width,
             height: height,
             model: this._jointPN,
-            interactive: true
+            interactive: true,
         });
 
         // add event calls to elements
         this._jointPaper.on('element:pointerdblclick', function(elementView) {
             const currentElement = elementView.model;
-            console.log(currentElement);
-            if (self._webgmePN) {
-                console.log(self._webgmePN.id2state[currentElement.id]);
-                self._setCurrentState(self._webgmePN.id2state[currentElement.id]);
+            if (self._webgmeData) {
+                if (self._webgmeData.id2transtions[currentElement.id] in self._webgmeData.events) {
+                    self._setState(self._webgmeData.id2transtions[currentElement.id]);
+                }
             }
         });
 
-        this._webgmePN = null;
+        this._webgmeData = null;
     };
 
+    
     PetriNetVizWidget.prototype.onWidgetContainerResize = function (width, height) {
         this._logger.debug('Widget is resizing...');
     };
@@ -60,8 +61,6 @@ define(['jointjs', 'css!./styles/PetriNetVizWidget.css'], function (joint) {
     // Petri Network manipulating functions called from the controller
     PetriNetVizWidget.prototype.initNetwork = function (networkDescriptor) {
         const self = this;
-        console.log(networkDescriptor);
-
         self._webgmeData = networkDescriptor;
         self._jointPN.clear();
         const pn = self._webgmeData;
@@ -76,19 +75,15 @@ define(['jointjs', 'css!./styles/PetriNetVizWidget.css'], function (joint) {
                 attrs: {
                     label : {
                         text: pn.places[placeId].tokens,
-                        //event: 'element:label:pointerdown',
                         fontWeight: 'bold',
                         cursor: 'text',
-                        //style: {
-                        //    userSelect: 'text'
-                        //}
                     },
                     body: {
                         strokeWidth: 2,
                         cursor: 'pointer'
                     }
                 },
-            tokens: pn.places[placeId].tokens
+                tokens: pn.places[placeId].tokens
             });
             vertex.addTo(self._jointPN);
             pn.places[placeId].joint = vertex;
@@ -102,13 +97,8 @@ define(['jointjs', 'css!./styles/PetriNetVizWidget.css'], function (joint) {
                 size: { width: 20, height: 60 },
                 attrs: {
                     label : {
-                        // text: pn.transitions[transId].name,
-                        //event: 'element:label:pointerdown',
                         fontWeight: 'bold',
                         cursor: 'pointer',
-                        //style: {
-                        //    userSelect: 'text'
-                        //}
                     },
                     body: {
                         strokeWidth: 2,
@@ -123,7 +113,6 @@ define(['jointjs', 'css!./styles/PetriNetVizWidget.css'], function (joint) {
 
         Object.keys(pn.places).forEach(placeId => {
             Object.values(pn.places[placeId].transitions).forEach(transId => {
-                console.log(pn.places[placeId]);
                 pn.places[placeId].jointArc = pn.places[placeId].jointArc || {};
                 const link = new joint.shapes.standard.Link({
                     source: {id: pn.places[placeId].joint.id},
@@ -138,7 +127,7 @@ define(['jointjs', 'css!./styles/PetriNetVizWidget.css'], function (joint) {
                     },
                     labels: [{
                         position: {
-                            distance: 0.5,
+                            distance: 0.25,
                             offset: 0,
                             args: {
                                 keepGradient: true,
@@ -192,9 +181,43 @@ define(['jointjs', 'css!./styles/PetriNetVizWidget.css'], function (joint) {
             })
         });
 
-        //now refresh the visualization
         self._jointPaper.updateViews();
         self._decorateMachine();
+        if (Object.keys(pn.events).length == 0){
+            alert('Network is Deadlocked!');
+        }
+    };
+
+    PetriNetVizWidget.prototype.fireTokens = function (places) {
+        const pn = this._webgmeData
+        Object.keys(places.inplaces).forEach(placeId => {
+            const link = pn.places[placeId].jointArc[places.fired];
+            const linkView = link.findView(this._jointPaper);
+            linkView.sendToken(joint.V('circle', { r: 5, fill: 'black' }), {duration:500});
+        });
+        Object.keys(places.outplaces).forEach(placeId => {
+            const link = pn.transitions[places.fired].jointArc[placeId];
+            const linkView = link.findView(this._jointPaper);
+            linkView.sendToken(joint.V('circle', { r: 5, fill: 'black' }), {duration:500});
+        });
+    };
+
+    PetriNetVizWidget.prototype.fireAllTokens = function (petriMap) {
+        const pn = this._webgmeData;
+        Object.keys(petriMap.t2p).forEach(transId => {
+            Object.keys(petriMap.t2p[transId]).forEach( placeId => {
+                const link = pn.transitions[transId].jointArc[placeId];
+                const linkView = link.findView(this._jointPaper);
+                linkView.sendToken(joint.V('circle', { r: 5, fill: 'black' }), {duration:500});
+            });
+        });
+        Object.keys(petriMap.p2t).forEach(placeId => {
+            Object.keys(petriMap.p2t[placeId]).forEach( transId => {
+                const link = pn.places[placeId].jointArc[transId];
+                const linkView = link.findView(this._jointPaper);
+                linkView.sendToken(joint.V('circle', { r: 5, fill: 'black' }), {duration:500});
+            });
+        });
     };
 
     PetriNetVizWidget.prototype._decorateMachine = function() {
@@ -210,6 +233,119 @@ define(['jointjs', 'css!./styles/PetriNetVizWidget.css'], function (joint) {
             data.transitions[transId].joint.attr('body/fill', 'black');
         });
     };
+
+    PetriNetVizWidget.prototype._setState = function(event) {
+        const pn = this._webgmeData;
+        const places = { inplaces:{}, outplaces:{}, fired: event }
+        const fireables = {};
+
+        //deincremet places
+        Object.keys(pn.places).forEach( placeId => {
+            Object.values(pn.places[placeId].transitions).forEach(transId => {
+                if (transId === event){
+                    pn.places[placeId].tokens -= 1;
+                    places.inplaces[placeId] = placeId;
+                }
+            });
+        });
+
+        Object.values(pn.transitions[event].places).forEach(placeId => {
+            pn.places[placeId].tokens += 1;
+            places.outplaces[placeId] = placeId;
+        });
+
+        Object.keys(pn.transitions).forEach( transId => {
+            pn.transitions[transId].fireable = true;
+        });
+        Object.keys(pn.places).forEach( placeId => {
+            Object.keys(pn.places[placeId].transitions).forEach( transId => {
+                fireables[transId] = transId;
+            });
+        });
+        Object.keys(pn.transitions).forEach( transId => {
+            if (!(transId in fireables)){
+                petri.transitions[transId].fireable = false;
+            }
+        });
+
+        Object.keys(pn.places).forEach( placeId => {
+            if (pn.places[placeId].tokens <= 0){
+                Object.values(pn.places[placeId].transitions).forEach( transId => {
+                    pn.transitions[transId].fireable = false;
+                });
+            }
+        });
+        pn.events = {};
+        Object.keys(pn.transitions).forEach( transId => {
+            if (pn.transitions[transId].fireable == true){
+                pn.events[transId] = transId;
+            }
+        });
+
+        this.fireTokens(places);
+        this._decorateMachine();
+        if (Object.keys(pn.events).length == 0){
+            alert('Network is Deadlocked!');
+        }
+    };
+
+    PetriNetVizWidget.prototype._setAllStates = function () {
+        const pn = this._webgmeData;
+        const netMap = { p2t:{}, t2p:{} };
+        const fireables = {};
+        //decremetn places
+        Object.keys(pn.places).forEach( placeId => {
+            Object.values(pn.places[placeId].transitions).forEach(transId => {
+                if (pn.transitions[transId].fireable == true){
+                    pn.places[placeId].tokens -= 1;
+                    netMap.p2t[placeId] = pn.places[placeId].transitions;
+                }
+            });
+        });
+
+        //increment places
+        Object.keys(pn.events).forEach( transId => {
+                Object.values(pn.transitions[transId].places).forEach( placeId => {
+                    pn.places[placeId].tokens += 1;
+                    netMap.t2p[transId] = pn.transitions[transId].places;
+                });
+        });
+
+        //determine fireability of transitions
+        Object.keys(pn.transitions).forEach( transId => {
+            pn.transitions[transId].fireable = true;
+        });
+        Object.keys(pn.places).forEach( placeId => {
+            Object.keys(pn.places[placeId].transitions).forEach( transId => {
+                fireables[transId] = transId;
+            });
+        });
+        Object.keys(pn.transitions).forEach( transId => {
+            if (!(transId in fireables)){
+                pn.transitions[transId].fireable = false;
+            }
+        });
+        Object.keys(pn.places).forEach( placeId => {
+            if (pn.places[placeId].tokens <= 0){
+                Object.values(pn.places[placeId].transitions).forEach( transId => {
+                    pn.transitions[transId].fireable = false;
+                });
+            }
+        });
+        pn.events = {};
+        Object.keys(pn.transitions).forEach( transId => {
+            if (pn.transitions[transId].fireable == true){
+                pn.events[transId] = transId;
+            }
+        });
+
+        this.fireAllTokens(netMap);
+        this._decorateMachine();
+        if (Object.keys(pn.events).length == 0){
+            alert('Network is Deadlocked!');
+        }
+    };
+
 
     // Adding/Removing/Updating items
     PetriNetVizWidget.prototype.addNode = function (desc) {
@@ -246,14 +382,14 @@ define(['jointjs', 'css!./styles/PetriNetVizWidget.css'], function (joint) {
 
     /* * * * * * * * Visualizer event handlers * * * * * * * */
 
-    PetriNetVizWidget.prototype.onNodeClick = function (/*id*/) {
+    // PetriNetVizWidget.prototype.onNodeClick = function (/*id*/) {
         // This currently changes the active node to the given id and
         // this is overridden in the controller.
-    };
+    // };
 
-    PetriNetVizWidget.prototype.onBackgroundDblClick = function () {
-        this._el.append('<div>Background was double-clicked!!</div>');
-    };
+    // PetriNetVizWidget.prototype.onBackgroundDblClick = function () {
+    //     this._el.append('<div>Background was double-clicked!!</div>');
+    // };
 
     /* * * * * * * * Visualizer life cycle callbacks * * * * * * * */
     PetriNetVizWidget.prototype.destroy = function () {

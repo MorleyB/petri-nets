@@ -117,7 +117,7 @@ class PetriNetCodeGenerator(PluginBase):
         return check
 
     def check_free_choice(self, transitions, places):
-        # Rule: each transition has its own unique set if ​inplaces
+        # Rule: each transition has its own unique set of ​inplaces
         check = False
         pouts = all([len(v) == 1 for p, v in places.items()])
 
