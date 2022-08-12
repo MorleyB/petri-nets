@@ -2,7 +2,8 @@
 
 This mini project is a design studio for modeling and simulating petri nets. The domain consists of tokens, places and transitions with arcs to connect these elements. 
 
-Petri nets are used to describe concurrent event and distributed systems. They provide a mathematical construct that can help to plan workflows or present data on complicated systems.
+Petri nets are used to describe concurrent event and distributed systems. They provide a mathematical construct that can help to plan workflows or present data on complicated systems. They can also be used to describe more 
+simplistic domains such as vending machines, processing a payment and a delivery system.
 
 ## Installation
 - [NodeJS](https://nodejs.org/en/) (LTS recommended or v16.13.1)
